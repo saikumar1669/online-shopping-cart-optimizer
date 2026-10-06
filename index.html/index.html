@@ -1,0 +1,1337 @@
+Here’s a runnable, single-file browser prototype. It uses **0/1 knapsack dynamic programming**: each product can be selected at most once, and the cart maximizes the sum of the products’ utility scores without exceeding the budget.
+
+Save this as `index.html` and open it in a browser. You can set a budget, add or remove products, and assign each product a utility score.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CartWise — Shopping Cart Optimizer</title>
+
+  <style>
+    :root {
+      --ink: #192b3a;
+      --muted: #708090;
+      --line: #e6ebef;
+      --surface: #ffffff;
+      --background: #f4f7f8;
+      --green: #167d64;
+      --green-dark: #10644f;
+      --green-soft: #e9f5f0;
+      --navy: #173449;
+      --red: #bd4c4c;
+      --shadow: 0 14px 40px rgba(31, 56, 72, 0.07);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, #e9f4f1 0, transparent 32rem),
+        var(--background);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .shell {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 24px 0 48px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      color: var(--navy);
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border-radius: 12px;
+      background: var(--green);
+      color: white;
+      font-size: 20px;
+      box-shadow: 0 7px 16px rgba(22, 125, 100, 0.22);
+    }
+
+    .brand small {
+      display: block;
+      margin-top: 1px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .demo-label {
+      padding: 8px 12px;
+      border: 1px solid #dce7e3;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.7);
+      color: var(--green-dark);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+      gap: 34px;
+      align-items: center;
+      margin-bottom: 26px;
+      padding: 32px;
+      border: 1px solid rgba(225, 234, 232, 0.9);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .hero h1 {
+      margin: 0;
+      color: var(--navy);
+      font-size: clamp(32px, 5vw, 52px);
+      line-height: 1.04;
+      letter-spacing: -0.055em;
+    }
+
+    .hero-copy > p:last-child {
+      max-width: 550px;
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    .budget-panel {
+      padding: 20px;
+      border-radius: 17px;
+      background: #f4f8f7;
+    }
+
+    .budget-panel label {
+      display: block;
+      margin-bottom: 9px;
+      color: #536778;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .budget-control {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 13px;
+      border: 1px solid #dbe6e2;
+      border-radius: 12px;
+      background: white;
+      color: var(--green-dark);
+    }
+
+    .budget-control > span {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .budget-control input {
+      width: 100%;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--navy);
+      font-size: 27px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .budget-help {
+      display: block;
+      margin: 8px 0 14px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .primary-button {
+      width: 100%;
+      padding: 13px 16px;
+      border: 0;
+      border-radius: 11px;
+      background: var(--green);
+      color: white;
+      font-size: 14px;
+      font-weight: 800;
+      transition: background 0.15s, transform 0.15s;
+    }
+
+    .primary-button:hover {
+      transform: translateY(-1px);
+      background: var(--green-dark);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 13px;
+      margin-bottom: 22px;
+    }
+
+    .stat-card {
+      padding: 17px 18px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: var(--surface);
+      box-shadow: 0 5px 18px rgba(31, 56, 72, 0.03);
+    }
+
+    .stat-label {
+      margin-bottom: 9px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      color: var(--navy);
+      font-size: 23px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .stat-caption {
+      margin-top: 5px;
+      color: #8a98a4;
+      font-size: 11px;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.28fr) minmax(310px, 0.72fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .panel {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 20px 21px 16px;
+    }
+
+    .panel-header h2 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 17px;
+      letter-spacing: -0.03em;
+    }
+
+    .panel-header p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .count-pill,
+    .algorithm-pill {
+      flex: 0 0 auto;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: var(--green-dark);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .column-labels,
+    .product-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 82px 69px 28px;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .column-labels {
+      padding: 10px 20px;
+      border-top: 1px solid #f0f3f4;
+      border-bottom: 1px solid #edf1f2;
+      background: #fafcfc;
+      color: #92a0aa;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+
+    .product-row {
+      min-height: 66px;
+      padding: 9px 20px;
+      border-bottom: 1px solid #edf1f2;
+      transition: background 0.15s;
+    }
+
+    .product-row:last-child {
+      border-bottom: 0;
+    }
+
+    .product-row.chosen {
+      background: #f5faf7;
+    }
+
+    .product-main {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 11px;
+    }
+
+    .choice-icon {
+      display: grid;
+      flex: 0 0 auto;
+      width: 27px;
+      height: 27px;
+      place-items: center;
+      border: 1px solid #e2e9e8;
+      border-radius: 9px;
+      background: white;
+      color: #a7b2b9;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .chosen .choice-icon {
+      border-color: #c9e6da;
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .product-copy {
+      min-width: 0;
+    }
+
+    .product-name {
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .product-subtitle {
+      margin-top: 4px;
+      color: #91a0aa;
+      font-size: 10px;
+    }
+
+    .product-price,
+    .product-utility {
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .product-utility {
+      color: var(--green-dark);
+    }
+
+    .remove-button {
+      display: grid;
+      width: 27px;
+      height: 27px;
+      place-items: center;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: #a8b2b8;
+      font-size: 19px;
+      line-height: 1;
+    }
+
+    .remove-button:hover {
+      background: #fff0ef;
+      color: var(--red);
+    }
+
+    .empty-catalog {
+      padding: 26px 20px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .add-section {
+      padding: 18px 20px 19px;
+      border-top: 1px solid var(--line);
+      background: #fbfcfc;
+    }
+
+    .add-section h3 {
+      margin: 0 0 13px;
+      color: var(--navy);
+      font-size: 13px;
+    }
+
+    .add-form {
+      display: grid;
+      grid-template-columns: minmax(120px, 1.4fr) minmax(95px, 0.75fr) minmax(85px, 0.65fr) auto;
+      gap: 9px;
+      align-items: end;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      color: #788894;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .field input {
+      width: 100%;
+      min-width: 0;
+      padding: 9px 10px;
+      border: 1px solid #dfe6e8;
+      border-radius: 9px;
+      outline: 0;
+      background: white;
+      color: var(--ink);
+      font-size: 12px;
+    }
+
+    .field input:focus,
+    .budget-control:focus-within {
+      border-color: #87b9a8;
+      box-shadow: 0 0 0 3px rgba(22, 125, 100, 0.08);
+    }
+
+    .add-button {
+      min-height: 36px;
+      padding: 0 13px;
+      border: 0;
+      border-radius: 9px;
+      background: var(--navy);
+      color: white;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .add-button:hover {
+      background: #244d66;
+    }
+
+    .add-button:disabled,
+    .field input:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .form-hint {
+      min-height: 15px;
+      margin: 9px 0 0;
+      color: #8a98a4;
+      font-size: 10px;
+    }
+
+    .form-hint.error {
+      color: var(--red);
+    }
+
+    .cart-panel {
+      position: sticky;
+      top: 16px;
+    }
+
+    .cart-header {
+      padding-bottom: 17px;
+      border-bottom: 1px solid #edf1f2;
+    }
+
+    .cart-count {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .cart-content {
+      padding: 19px 21px 21px;
+    }
+
+    .budget-meter {
+      margin-bottom: 15px;
+    }
+
+    .meter-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 9px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .meter-label strong {
+      color: var(--ink);
+      font-size: 11px;
+    }
+
+    .meter-track {
+      height: 8px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #edf2f1;
+    }
+
+    .meter-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #219475, #65b899);
+      transition: width 0.25s ease;
+    }
+
+    .cart-list {
+      display: grid;
+      gap: 0;
+    }
+
+    .cart-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 0;
+      border-bottom: 1px solid #eff2f3;
+    }
+
+    .cart-item-mark {
+      display: grid;
+      flex: 0 0 auto;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--green-soft);
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .cart-item-copy {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .cart-item-name {
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .cart-item-utility {
+      margin-top: 4px;
+      color: #8a98a4;
+      font-size: 10px;
+    }
+
+    .cart-item-price {
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .cart-summary {
+      display: grid;
+      gap: 10px;
+      padding-top: 15px;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .summary-row strong {
+      color: var(--navy);
+      font-size: 13px;
+    }
+
+    .summary-row.highlight strong {
+      color: var(--green-dark);
+      font-size: 15px;
+    }
+
+    .empty-cart {
+      padding: 14px 4px 18px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .empty-cart-icon {
+      display: grid;
+      width: 46px;
+      height: 46px;
+      margin: 0 auto 12px;
+      place-items: center;
+      border-radius: 15px;
+      background: #f1f6f4;
+      color: var(--green);
+      font-size: 20px;
+    }
+
+    .empty-cart h3 {
+      margin: 0 0 7px;
+      color: var(--navy);
+      font-size: 14px;
+    }
+
+    .empty-cart p {
+      max-width: 250px;
+      margin: 0 auto;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    .algorithm-box {
+      margin: 0 21px 20px;
+      padding: 14px;
+      border: 1px solid #e7efeb;
+      border-radius: 12px;
+      background: #f8fbf9;
+    }
+
+    .algorithm-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 7px;
+      color: var(--navy);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .algorithm-box p {
+      margin: 0;
+      color: #7e8d97;
+      font-size: 10px;
+      line-height: 1.6;
+    }
+
+    .algorithm-box code {
+      display: block;
+      margin-top: 9px;
+      color: var(--green-dark);
+      font-family: inherit;
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .footer {
+      padding: 22px 4px 0;
+      color: #8a98a4;
+      font-size: 11px;
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    @media (max-width: 850px) {
+      .hero {
+        grid-template-columns: minmax(0, 1fr) minmax(250px, 0.75fr);
+        gap: 22px;
+        padding: 25px;
+      }
+
+      .workspace {
+        grid-template-columns: minmax(0, 1fr) minmax(270px, 0.8fr);
+        gap: 14px;
+      }
+
+      .add-form {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 680px) {
+      .shell {
+        width: min(100% - 26px, 520px);
+        padding-top: 15px;
+      }
+
+      .topbar {
+        margin-bottom: 17px;
+      }
+
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 21px;
+        padding: 23px 20px;
+      }
+
+      .hero h1 {
+        font-size: 39px;
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px;
+      }
+
+      .stat-card {
+        padding: 14px;
+      }
+
+      .stat-value {
+        font-size: 21px;
+      }
+
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .cart-panel {
+        position: static;
+      }
+
+      .column-labels,
+      .product-row {
+        grid-template-columns: minmax(0, 1fr) 66px 54px 25px;
+        gap: 7px;
+        padding-right: 13px;
+        padding-left: 13px;
+      }
+
+      .column-labels {
+        padding-top: 9px;
+        padding-bottom: 9px;
+      }
+
+      .panel-header {
+        padding-right: 15px;
+        padding-left: 15px;
+      }
+
+      .add-section {
+        padding-right: 15px;
+        padding-left: 15px;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .demo-label {
+        padding: 7px 9px;
+        font-size: 9px;
+      }
+
+      .product-name {
+        font-size: 12px;
+      }
+
+      .product-price,
+      .product-utility {
+        font-size: 11px;
+      }
+
+      .add-form {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">C</div>
+        <div>
+          CartWise
+          <small>Smart cart optimizer</small>
+        </div>
+      </div>
+      <div class="demo-label">Prototype</div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">0/1 Knapsack · Dynamic Programming</p>
+          <h1>Spend smarter.<br />Get more value.</h1>
+          <p>
+            Set your budget and give products utility scores based on how useful
+            they are to you. CartWise finds the highest-value combination that
+            stays within your budget.
+          </p>
+        </div>
+
+        <div class="budget-panel">
+          <label for="budgetInput">Your shopping budget</label>
+          <div class="budget-control">
+            <span aria-hidden="true">$</span>
+            <input
+              id="budgetInput"
+              type="number"
+              min="0.01"
+              max="5000"
+              step="0.01"
+              value="150.00"
+              aria-label="Shopping budget in dollars"
+            />
+          </div>
+          <small class="budget-help">Enter an amount from $0.01 to $5,000.</small>
+          <button id="optimizeButton" class="primary-button" type="button">
+            Find my best cart
+          </button>
+        </div>
+      </section>
+
+      <section id="stats" class="stats" aria-label="Cart summary"></section>
+
+      <section class="workspace">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Product catalog</h2>
+              <p>Higher utility points mean the product matters more to you.</p>
+            </div>
+            <span id="productCount" class="count-pill"></span>
+          </div>
+
+          <div class="column-labels" aria-hidden="true">
+            <span>Product</span>
+            <span>Price</span>
+            <span>Utility</span>
+            <span></span>
+          </div>
+
+          <div id="productList"></div>
+
+          <div class="add-section">
+            <h3>Add a product</h3>
+            <form id="addForm" class="add-form">
+              <div class="field">
+                <label for="newName">Product name</label>
+                <input
+                  id="newName"
+                  type="text"
+                  maxlength="50"
+                  placeholder="e.g. Water bottle"
+                  required
+                />
+              </div>
+
+              <div class="field">
+                <label for="newPrice">Price ($)</label>
+                <input
+                  id="newPrice"
+                  type="number"
+                  min="0.01"
+                  max="5000"
+                  step="0.01"
+                  placeholder="19.99"
+                  required
+                />
+              </div>
+
+              <div class="field">
+                <label for="newUtility">Utility</label>
+                <input
+                  id="newUtility"
+                  type="number"
+                  min="1"
+                  max="1000"
+                  step="1"
+                  placeholder="40"
+                  required
+                />
+              </div>
+
+              <button id="addButton" class="add-button" type="submit">Add</button>
+            </form>
+            <p id="addHint" class="form-hint" aria-live="polite">
+              Utility is a whole-number score from 1 to 1,000. Up to 40 products.
+            </p>
+          </div>
+        </div>
+
+        <aside class="panel cart-panel">
+          <div class="panel-header cart-header">
+            <div>
+              <h2>Optimized cart</h2>
+              <p>The best combination for your budget.</p>
+            </div>
+            <span class="algorithm-pill">0/1 DP</span>
+          </div>
+
+          <div id="cartContent" class="cart-content" aria-live="polite"></div>
+
+          <div class="algorithm-box">
+            <div class="algorithm-title">
+              <span aria-hidden="true">✦</span>
+              How the optimizer works
+            </div>
+            <p>
+              For each product, dynamic programming compares skipping it with
+              adding it at every budget capacity. Each product can be chosen
+              only once.
+            </p>
+            <code>Time: O(n × B) · B = budget in cents</code>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="footer">
+        This prototype keeps catalog changes in the current browser session.
+        Refreshing the page restores the example products.
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    const MAX_BUDGET_CENTS = 5000 * 100;
+    const MAX_PRODUCTS = 40;
+    const MAX_UTILITY = 1000;
+
+    let products = [
+      { id: 1, name: "Noise-canceling headphones", priceCents: 7999, utility: 95 },
+      { id: 2, name: "Mechanical keyboard", priceCents: 5499, utility: 70 },
+      { id: 3, name: "USB-C hub", priceCents: 3999, utility: 65 },
+      { id: 4, name: "HD webcam", priceCents: 4999, utility: 72 },
+      { id: 5, name: "Wireless mouse", priceCents: 2499, utility: 38 },
+      { id: 6, name: "Laptop stand", priceCents: 2999, utility: 45 },
+      { id: 7, name: "Desk lamp", priceCents: 1999, utility: 30 },
+      { id: 8, name: "Notebook set", priceCents: 1299, utility: 18 },
+      { id: 9, name: "Portable SSD", priceCents: 6999, utility: 81 },
+      { id: 10, name: "Insulated travel mug", priceCents: 1499, utility: 22 }
+    ];
+
+    let nextId = 11;
+    let lastResult = null;
+
+    const currencyFormatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD"
+    });
+
+    const budgetInput = document.getElementById("budgetInput");
+    const optimizeButton = document.getElementById("optimizeButton");
+    const productList = document.getElementById("productList");
+    const productCount = document.getElementById("productCount");
+    const cartContent = document.getElementById("cartContent");
+    const stats = document.getElementById("stats");
+    const addForm = document.getElementById("addForm");
+    const newNameInput = document.getElementById("newName");
+    const newPriceInput = document.getElementById("newPrice");
+    const newUtilityInput = document.getElementById("newUtility");
+    const addButton = document.getElementById("addButton");
+    const addHint = document.getElementById("addHint");
+
+    function money(cents) {
+      return currencyFormatter.format(cents / 100);
+    }
+
+    function escapeHTML(value) {
+      const entities = {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      };
+
+      return String(value).replace(/[&<>"']/g, character => entities[character]);
+    }
+
+    /*
+      0/1 Knapsack dynamic programming.
+
+      best[capacity] stores the highest utility found so far for that capacity.
+      Capacities are processed backwards so the current product cannot be
+      reused in the same iteration. The take table records choices so the
+      selected products can be reconstructed afterward.
+    */
+    function optimizeKnapsack(items, budgetCents) {
+      const itemCount = items.length;
+      const width = budgetCents + 1;
+      const best = new Uint32Array(width);
+      const take = new Uint8Array(itemCount * width);
+
+      for (let itemIndex = 0; itemIndex < itemCount; itemIndex += 1) {
+        const item = items[itemIndex];
+        const rowOffset = itemIndex * width;
+
+        for (let capacity = budgetCents; capacity >= item.priceCents; capacity -= 1) {
+          const candidate =
+            best[capacity - item.priceCents] + item.utility;
+
+          if (candidate > best[capacity]) {
+            best[capacity] = candidate;
+            take[rowOffset + capacity] = 1;
+          }
+        }
+      }
+
+      const picked = [];
+      let remainingCapacity = budgetCents;
+
+      for (let itemIndex = itemCount - 1; itemIndex >= 0; itemIndex -= 1) {
+        const choiceIndex = itemIndex * width + remainingCapacity;
+
+        if (take[choiceIndex]) {
+          picked.push(items[itemIndex]);
+          remainingCapacity -= items[itemIndex].priceCents;
+        }
+      }
+
+      picked.reverse();
+
+      const totalCost = picked.reduce(
+        (total, item) => total + item.priceCents,
+        0
+      );
+
+      return {
+        picked,
+        totalCost,
+        totalUtility: best[budgetCents]
+      };
+    }
+
+    function renderStats(budgetCents, result) {
+      const percentUsed = budgetCents
+        ? Math.round((result.totalCost / budgetCents) * 100)
+        : 0;
+
+      const cards = [
+        {
+          label: "Budget",
+          value: money(budgetCents),
+          caption: "Maximum spending limit"
+        },
+        {
+          label: "Cart cost",
+          value: money(result.totalCost),
+          caption: `${result.picked.length} product${result.picked.length === 1 ? "" : "s"} selected`
+        },
+        {
+          label: "Utility score",
+          value: `${result.totalUtility} pts`,
+          caption: "Total value of the selected cart"
+        },
+        {
+          label: "Remaining",
+          value: money(budgetCents - result.totalCost),
+          caption: `${percentUsed}% of budget used`
+        }
+      ];
+
+      stats.innerHTML = cards.map(card => `
+        <article class="stat-card">
+          <div class="stat-label">${card.label}</div>
+          <div class="stat-value">${card.value}</div>
+          <div class="stat-caption">${card.caption}</div>
+        </article>
+      `).join("");
+    }
+
+    function updateAddFormState() {
+      const isFull = products.length >= MAX_PRODUCTS;
+
+      [newNameInput, newPriceInput, newUtilityInput, addButton].forEach(element => {
+        element.disabled = isFull;
+      });
+
+      if (isFull) {
+        addHint.textContent = `The catalog limit of ${MAX_PRODUCTS} products has been reached. Remove a product to add another.`;
+      } else {
+        addHint.textContent =
+          "Utility is a whole-number score from 1 to 1,000. Up to 40 products.";
+      }
+
+      addHint.classList.remove("error");
+    }
+
+    function renderCatalog() {
+      productCount.textContent = `${products.length} / ${MAX_PRODUCTS} products`;
+
+      const selectedIds = new Set(
+        lastResult ? lastResult.picked.map(item => item.id) : []
+      );
+
+      if (products.length === 0) {
+        productList.innerHTML = `
+          <div class="empty-catalog">
+            Your catalog is empty. Add products below to get started.
+          </div>
+        `;
+      } else {
+        productList.innerHTML = products.map(product => {
+          const selected = selectedIds.has(product.id);
+          const safeName = escapeHTML(product.name);
+          const subtitle = selected
+            ? "Included in the optimized cart"
+            : `${product.utility} utility points`;
+
+          return `
+            <div class="product-row ${selected ? "chosen" : ""}">
+              <div class="product-main">
+                <span class="choice-icon" aria-hidden="true">${selected ? "✓" : "○"}</span>
+                <div class="product-copy">
+                  <div class="product-name">${safeName}</div>
+                  <div class="product-subtitle">${subtitle}</div>
+                </div>
+              </div>
+              <span class="product-price">${money(product.priceCents)}</span>
+              <span class="product-utility">${product.utility} pts</span>
+              <button
+                class="remove-button"
+                type="button"
+                data-remove="${product.id}"
+                aria-label="Remove ${safeName}"
+                title="Remove product"
+              >×</button>
+            </div>
+          `;
+        }).join("");
+      }
+
+      updateAddFormState();
+    }
+
+    function renderCart(budgetCents, result) {
+      const picked = result.picked;
+      const itemCountLabel =
+        `${picked.length} item${picked.length === 1 ? "" : "s"}`;
+
+      document.getElementById("cartCount").textContent = itemCountLabel;
+
+      if (picked.length === 0) {
+        const title = products.length === 0
+          ? "Your catalog is empty"
+          : "No products fit this budget";
+
+        const message = products.length === 0
+          ? "Add products to the catalog and the optimizer will build a cart for you."
+          : "Try raising your budget or adding products with a lower price.";
+
+        cartContent.innerHTML = `
+          <div class="empty-cart">
+            <div class="empty-cart-icon" aria-hidden="true">✦</div>
+            <h3>${title}</h3>
+            <p>${message}</p>
+          </div>
+        `;
+        return;
+      }
+
+      const percentUsed = Math.min(
+        100,
+        Math.round((result.totalCost / budgetCents) * 100)
+      );
+
+      const cartItems = picked.map((item, index) => `
+        <div class="cart-item">
+          <span class="cart-item-mark">${index + 1}</span>
+          <div class="cart-item-copy">
+            <div class="cart-item-name">${escapeHTML(item.name)}</div>
+            <div class="cart-item-utility">${item.utility} utility points</div>
+          </div>
+          <span class="cart-item-price">${money(item.priceCents)}</span>
+        </div>
+      `).join("");
+
+      cartContent.innerHTML = `
+        <div class="budget-meter">
+          <div class="meter-label">
+            <span>Budget used</span>
+            <strong>${money(result.totalCost)} / ${money(budgetCents)}</strong>
+          </div>
+          <div
+            class="meter-track"
+            role="progressbar"
+            aria-label="Budget used"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="${percentUsed}"
+          >
+            <div class="meter-fill" style="width: ${percentUsed}%"></div>
+          </div>
+        </div>
+
+        <div class="cart-list">${cartItems}</div>
+
+        <div class="cart-summary">
+          <div class="summary-row highlight">
+            <span>Total utility</span>
+            <strong>${result.totalUtility} pts</strong>
+          </div>
+          <div class="summary-row">
+            <span>Budget remaining</span>
+            <strong>${money(budgetCents - result.totalCost)}</strong>
+          </div>
+        </div>
+      `;
+    }
+
+    function runOptimization() {
+      const budgetDollars = budgetInput.valueAsNumber;
+
+      if (
+        !Number.isFinite(budgetDollars) ||
+        budgetDollars <= 0 ||
+        budgetDollars > 5000
+      ) {
+        budgetInput.setCustomValidity("Enter a budget from $0.01 to $5,000.");
+        budgetInput.reportValidity();
+        return;
+      }
+
+      budgetInput.setCustomValidity("");
+
+      const budgetCents = Math.min(
+        MAX_BUDGET_CENTS,
+        Math.round(budgetDollars * 100)
+      );
+
+      lastResult = optimizeKnapsack(products, budgetCents);
+
+      renderStats(budgetCents, lastResult);
+      renderCatalog();
+      renderCart(budgetCents, lastResult);
+    }
+
+    optimizeButton.addEventListener("click", runOptimization);
+    budgetInput.addEventListener("change", runOptimization);
+
+    productList.addEventListener("click", event => {
+      const removeButton = event.target.closest("[data-remove]");
+
+      if (!removeButton) {
+        return;
+      }
+
+      const productId = Number(removeButton.dataset.remove);
+      products = products.filter(product => product.id !== productId);
+      runOptimization();
+    });
+
+    addForm.addEventListener("submit", event => {
+      event.preventDefault();
+
+      if (products.length >= MAX_PRODUCTS) {
+        return;
+      }
+
+      const name = newNameInput.value.trim();
+      const priceDollars = newPriceInput.valueAsNumber;
+      const utility = newUtilityInput.valueAsNumber;
+
+      if (
+        !name ||
+        !Number.isFinite(priceDollars) ||
+        priceDollars <= 0 ||
+        priceDollars > 5000 ||
+        !Number.isInteger(utility) ||
+        utility < 1 ||
+        utility > MAX_UTILITY
+      ) {
+        addHint.textContent =
+          "Enter a name, a price up to $5,000, and a whole-number utility score from 1 to 1,000.";
+        addHint.classList.add("error");
+        return;
+      }
+
+      const priceCents = Math.round(priceDollars * 100);
+
+      if (priceCents <= 0) {
+        addHint.textContent = "The product price must be at least $0.01.";
+        addHint.classList.add("error");
+        return;
+      }
+
+      products.push({
+        id: nextId,
+        name,
+        priceCents,
+        utility
+      });
+
+      nextId += 1;
+      addForm.reset();
+      runOptimization();
+      newNameInput.focus();
+    });
+
+    // Add the cart count element after the page markup is loaded.
+    document.getElementById("cartCount").textContent = "0 items";
+    runOptimization();
+  </script>
+</body>
+</html>
+```
+
+One small markup fix is needed before running: add this element inside the cart panel header, next to the “Optimized cart” heading:
+
+```html
+<span id="cartCount" class="cart-count">0 items</span>
+```
+
+The DP uses integer cents for prices and runs in **O(n × B)** time, where `n` is the number of products and `B` is the budget in cents. The product utility score is user-defined, so higher scores represent items that are more valuable to that shopper.
